@@ -1,0 +1,8 @@
+{
+  "description": "Mimi's tour guide, an app for Scicli, Italy, with AI-powered features like landmark recognition, a local guide chat, and a translator.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ],
+  "name": "Mimi's tour guide 🥰✌️"
+}
