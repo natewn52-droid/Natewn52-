@@ -133,6 +133,9 @@ const MagicLens = ({ location }) => {
     const [error, setError] = useState('');
     const [selectedVoice, setSelectedVoice] = useState('Kore');
     const [isBookmarked, setIsBookmarked] = useState(false);
+    const [stylizedImage, setStylizedImage] = useState('');
+    const [isGeneratingStylizedImage, setIsGeneratingStylizedImage] = useState(false);
+
 
     const ai = new GoogleGenAI({ apiKey: API_KEY });
     const audioContextRef = useRef(null);
@@ -150,6 +153,7 @@ const MagicLens = ({ location }) => {
                 }
                 setAnalysis(null);
                 setIsBookmarked(false);
+                setStylizedImage('');
             };
             reader.readAsDataURL(file);
         }
@@ -164,6 +168,7 @@ const MagicLens = ({ location }) => {
         setError('');
         setAnalysis(null);
         setIsBookmarked(false);
+        setStylizedImage('');
 
         const reader = new FileReader();
         reader.readAsDataURL(image);
@@ -191,10 +196,37 @@ const MagicLens = ({ location }) => {
                     config: { tools: [{ googleSearch: {} }] },
                 });
                 setAnalysis(response);
+                setIsLoading(false);
+
+                // Now, generate the stylized image
+                setIsGeneratingStylizedImage(true);
+                try {
+                    const imageGenPrompt = `Generate a beautiful, artistic, stylized watercolor illustration of the landmark described here: ${response.text}`;
+                    const imageResponse = await ai.models.generateContent({
+                        model: 'gemini-2.5-flash-image',
+                        contents: { parts: [{ text: imageGenPrompt }] },
+                        config: {
+                            responseModalities: [Modality.IMAGE],
+                        },
+                    });
+
+                    for (const part of imageResponse.candidates[0].content.parts) {
+                        if (part.inlineData) {
+                            const base64ImageBytes = part.inlineData.data;
+                            const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+                            setStylizedImage(imageUrl);
+                            break;
+                        }
+                    }
+                } catch (imgErr) {
+                    console.error("Stylized image generation failed:", imgErr);
+                    // Don't show a user-facing error for this bonus feature, just log it.
+                } finally {
+                    setIsGeneratingStylizedImage(false);
+                }
             } catch (err) {
                 console.error(err);
                 setError('Failed to analyze the image. Please try again.');
-            } finally {
                 setIsLoading(false);
             }
         };
@@ -288,6 +320,12 @@ const MagicLens = ({ location }) => {
                                 </div>
                             ))}
                         </div>
+                    </div>
+
+                    <div className="stylized-image-container">
+                        <h3>Mimi's Artistic Impression</h3>
+                        {isGeneratingStylizedImage && <div className="loader"><div className="dot-flashing"></div></div>}
+                        {stylizedImage && <img src={stylizedImage} alt="Stylized version of the landmark" className="image-preview" />}
                     </div>
 
                     {analysis.candidates?.[0]?.groundingMetadata?.groundingChunks?.length > 0 && (
@@ -605,6 +643,32 @@ const Translator = () => {
 };
 
 const Help = ({ setActiveTab }) => {
+    const [scicliInfo, setScicliInfo] = useState('');
+    const [isLoadingInfo, setIsLoadingInfo] = useState(false);
+    const [errorInfo, setErrorInfo] = useState('');
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+    const getScicliInfo = async () => {
+        setIsLoadingInfo(true);
+        setErrorInfo('');
+        setScicliInfo(''); // Clear previous info
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: "Provide a brief and engaging overview of Scicli, Italy, for a tourist. Highlight its history, its significance as a UNESCO World Heritage site for Baroque architecture, and its connection to Inspector Montalbano.",
+                config: {
+                    tools: [{ googleSearch: {} }],
+                },
+            });
+            setScicliInfo(response.text);
+        } catch (err) {
+            console.error("Failed to fetch Scicli info:", err);
+            setErrorInfo("Sorry, I couldn't fetch information about Scicli right now. Please try again later.");
+        } finally {
+            setIsLoadingInfo(false);
+        }
+    };
+
     return (
         <div className="card help-guide">
             <div className="help-message model-message">
@@ -639,6 +703,24 @@ const Help = ({ setActiveTab }) => {
                     <h3>Translator</h3>
                     <p>Need help with the language? The <strong>Translator</strong> is here for you. I can translate between English and Italian. You can even use your voice to speak and hear the translation!</p>
                     <button className="button" onClick={() => setActiveTab('translator')}>Translate Now</button>
+                 </div>
+            </div>
+
+            <div className="help-message model-message">
+                 <span className="material-icons help-icon">info_outline</span>
+                 <div className="help-text">
+                    <h3>A Glimpse of Scicli</h3>
+                    <p>Curious about the town itself? Click the button below for a quick introduction to Scicli's history and significance.</p>
+                    <button className="button" onClick={getScicliInfo} disabled={isLoadingInfo}>
+                        {isLoadingInfo ? 'Loading...' : 'Tell Me About Scicli'}
+                    </button>
+                    {isLoadingInfo && <div className="loader" style={{paddingTop: '1rem', justifyContent: 'flex-start'}}><div className="dot-flashing"></div></div>}
+                    {errorInfo && <p style={{ color: 'red', marginTop: '1rem' }}>{errorInfo}</p>}
+                    {scicliInfo && (
+                        <div className="result-container" style={{paddingTop: '1rem', marginTop: 0}}>
+                            <p>{scicliInfo}</p>
+                        </div>
+                    )}
                  </div>
             </div>
             
